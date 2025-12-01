@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Media Lyrics Player (Drag & Drop)</title>
+    <title>Fixed Highlight Lyrics Player</title>
     
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 
@@ -12,7 +12,9 @@
         :root {
             --bg-image: url(''); 
             --line-height: 12vh; 
-            --active-scale: 1.3; 
+            --active-scale: 1.3;
+            /* 기본 하이라이트 색상 (흰색 반투명) */
+            --active-bg-color: rgba(255, 255, 255, 0.2); 
         }
 
         body {
@@ -55,13 +57,12 @@
 
         .editor-container h2 { text-align: center; color: #fff; margin-bottom: 5px; }
         
-        /* 파일 업로드 스타일 (드래그 앤 드롭 지원) */
         .file-group { display: flex; gap: 10px; }
         
         .file-box {
             flex: 1;
             background: #222;
-            border: 2px solid #444; /* 테두리 두께 변경 */
+            border: 2px solid #444;
             border-radius: 8px;
             padding: 20px;
             text-align: center;
@@ -73,25 +74,26 @@
         }
         
         .file-box:hover { background: #333; color: #fff; border-color: #888; }
-        
-        /* 파일 드래그 시 스타일 */
-        .file-box.drag-over {
-            background: #333;
-            border-color: #fff;
-            border-style: dashed; /* 점선 효과 */
-            transform: scale(1.02);
-            color: #fff;
-        }
-
-        .file-box.active { 
-            border-color: #4cd964; border-style: solid; 
-            color: #4cd964; font-weight: bold; background: #1a1a1a;
-        }
+        .file-box.drag-over { background: #333; border-color: #fff; border-style: dashed; transform: scale(1.02); color: #fff; }
+        .file-box.active { border-color: #4cd964; border-style: solid; color: #4cd964; font-weight: bold; background: #1a1a1a; }
         
         input[type="file"] { display: none; }
 
+        .color-picker-container {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #222; padding: 10px 15px;
+            border-radius: 8px; border: 1px solid #444; color: #ccc;
+        }
+        
+        input[type="color"] {
+            -webkit-appearance: none; border: none; width: 40px; height: 40px;
+            border-radius: 50%; cursor: pointer; padding: 0; background: none;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid #555; border-radius: 50%; }
+
         textarea {
-            width: 100%; height: 250px;
+            width: 100%; height: 200px;
             padding: 15px; background: #222; border: 1px solid #444;
             color: #fff; border-radius: 8px;
             font-size: 1rem; font-family: 'Pretendard';
@@ -124,16 +126,36 @@
 
         #mainVideo { width: 100%; height: 100%; object-fit: cover; display: none; }
 
+        /* 가사 뷰포트 */
         .lyrics-viewport {
             flex-grow: 1; height: 84vh; position: relative;
+            /* 그라데이션 마스크 */
             mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
             -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
         }
 
+        /* --- 핵심 기능: 고정된 하이라이트 박스 --- */
+        .highlight-bar {
+            position: absolute;
+            top: 36vh; /* 가사 리스트의 padding-top과 동일한 위치 (4번째 줄) */
+            left: 0;
+            width: 100%;
+            height: 12vh; /* 라인 높이와 동일 */
+            background-color: var(--active-bg-color); /* 선택한 색상 적용 */
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2); /* 입체감 */
+            z-index: 0; /* 글자보다 뒤에 위치 */
+            pointer-events: none; /* 클릭 통과 */
+            transition: background-color 0.3s;
+        }
+
         .lyrics-list {
             list-style: none; padding: 0; margin: 0;
+            position: relative; 
+            z-index: 1; /* 하이라이트 박스보다 위에 위치 */
             transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-            padding-top: 36vh; width: 100%;
+            padding-top: 36vh; /* 중앙 정렬을 위한 여백 */
+            width: 100%;
         }
 
         .lyric-line {
@@ -142,12 +164,14 @@
             text-align: center; white-space: pre-wrap; word-break: keep-all; 
             font-size: 3.5vh; color: rgba(255, 255, 255, 0.45);
             font-weight: 600; transform-origin: center center;
-            transition: all 0.4s ease; padding: 0 20px;
+            transition: all 0.4s ease;
+            padding: 0 30px; 
         }
 
+        /* 활성 가사 스타일 (배경색은 제거하고 텍스트 효과만 유지) */
         .lyric-line.active {
             color: #fff; font-weight: 800;
-            text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
             transform: scale(var(--active-scale)); opacity: 1;
         }
         
@@ -190,15 +214,19 @@
             <div class="file-group">
                 <label class="file-box" id="labelImage">
                     🖼️ 이미지 파일 놓기<br>
-                    <span style="font-size:0.8rem">(클릭 또는 드래그)</span>
+                    <span style="font-size:0.8rem">(배경/앨범)</span>
                     <input type="file" id="inputImage" accept="image/*">
                 </label>
-
                 <label class="file-box" id="labelMedia">
                     🎵 미디어 파일 놓기<br>
-                    <span style="font-size:0.8rem">(MP3/MP4 클릭/드래그)</span>
+                    <span style="font-size:0.8rem">(MP3/MP4)</span>
                     <input type="file" id="inputMedia" accept="audio/*, video/*">
                 </label>
+            </div>
+
+            <div class="color-picker-container">
+                <label for="inputColor">🎨 고정 배경바 색상 선택:</label>
+                <input type="color" id="inputColor" value="#ffffff">
             </div>
 
             <textarea id="inputLyrics" placeholder="가사를 입력하세요.">
@@ -229,12 +257,13 @@
         </div>
 
         <div class="lyrics-viewport">
+            <div class="highlight-bar"></div>
+            
             <ul class="lyrics-list" id="lyricsList"></ul>
         </div>
     </section>
 
     <script>
-        // --- 요소 선택 ---
         const editorSection = document.getElementById('editorSection');
         const playerSection = document.getElementById('playerSection');
         const lyricsList = document.getElementById('lyricsList');
@@ -247,6 +276,7 @@
         const labelImage = document.getElementById('labelImage');
         const labelMedia = document.getElementById('labelMedia');
         const inputLyrics = document.getElementById('inputLyrics');
+        const inputColor = document.getElementById('inputColor');
 
         let currentIndex = 0;
         let totalLines = 0;
@@ -254,32 +284,18 @@
         let isVideoMode = false;
         let currentImgUrl = "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?q=80&w=1000&auto=format&fit=crop";
 
-        // --- 파일 처리 로직 (통합) ---
-
-        // 1. 이미지 파일 처리
         function handleImageUpload(file) {
-            if (!file) return;
-            if (!file.type.startsWith('image/')) {
-                alert('이미지 파일만 업로드 가능합니다.');
-                return;
-            }
+            if (!file || !file.type.startsWith('image/')) return;
             currentImgUrl = URL.createObjectURL(file);
             labelImage.classList.add('active');
-            labelImage.innerHTML = `✅ 이미지 준비됨<br><span style="font-size:0.8rem">${file.name}</span>`;
-            // input 값은 초기화하여 같은 파일 다시 선택 가능하게 함
+            labelImage.innerHTML = `✅ 이미지<br><span style="font-size:0.8rem">${file.name}</span>`;
         }
 
-        // 2. 미디어 파일 처리
         function handleMediaUpload(file) {
-            if (!file) return;
-            if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
-                alert('오디오(MP3) 또는 비디오(MP4) 파일만 가능합니다.');
-                return;
-            }
-
+            if (!file || (!file.type.startsWith('audio/') && !file.type.startsWith('video/'))) return;
             const fileUrl = URL.createObjectURL(file);
             labelMedia.classList.add('active');
-            labelMedia.innerHTML = `✅ 미디어 준비됨<br><span style="font-size:0.8rem">${file.name}</span>`;
+            labelMedia.innerHTML = `✅ 미디어<br><span style="font-size:0.8rem">${file.name}</span>`;
 
             if (file.type.startsWith('video/')) {
                 isVideoMode = true;
@@ -292,48 +308,35 @@
             }
         }
 
-        // --- 이벤트 리스너 설정 (Click & Drag-Drop) ---
-
-        // 드래그 앤 드롭 공통 함수
         function setupDragDrop(boxElement, handleFunction) {
-            // 기본 동작(브라우저 파일 열기) 방지
             ['dragover', 'dragleave', 'drop'].forEach(eventName => {
-                boxElement.addEventListener(eventName, (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }, false);
+                boxElement.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
             });
-
-            // 드래그 들어올 때 효과
-            boxElement.addEventListener('dragover', () => {
-                boxElement.classList.add('drag-over');
-            });
-
-            // 드래그 나갈 때 효과
-            boxElement.addEventListener('dragleave', () => {
-                boxElement.classList.remove('drag-over');
-            });
-
-            // 파일 놓았을 때 (Drop)
+            boxElement.addEventListener('dragover', () => boxElement.classList.add('drag-over'));
+            boxElement.addEventListener('dragleave', () => boxElement.classList.remove('drag-over'));
             boxElement.addEventListener('drop', (e) => {
                 boxElement.classList.remove('drag-over');
-                const file = e.dataTransfer.files[0]; // 첫 번째 파일만 가져옴
-                handleFunction(file);
+                handleFunction(e.dataTransfer.files[0]);
             });
         }
-
-        // 1. 이미지 박스 연결
         inputImage.addEventListener('change', (e) => handleImageUpload(e.target.files[0]));
         setupDragDrop(labelImage, handleImageUpload);
-
-        // 2. 미디어 박스 연결
         inputMedia.addEventListener('change', (e) => handleMediaUpload(e.target.files[0]));
         setupDragDrop(labelMedia, handleMediaUpload);
 
+        function hexToRgba(hex, alpha) {
+            let r = parseInt(hex.slice(1, 3), 16);
+            let g = parseInt(hex.slice(3, 5), 16);
+            let b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
 
-        // --- 재생 및 뷰어 로직 ---
         function startPlayer() {
             document.documentElement.style.setProperty('--bg-image', `url('${currentImgUrl}')`);
+            
+            const selectedColor = inputColor.value;
+            const rgbaColor = hexToRgba(selectedColor, 0.25); // 투명도 25%
+            document.documentElement.style.setProperty('--active-bg-color', rgbaColor);
             
             lyricsList.innerHTML = '';
             const rawText = inputLyrics.value;
